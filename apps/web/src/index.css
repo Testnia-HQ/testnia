@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  overflow-x: clip;
+}
+
+@layer base {
+  :root {
+    --background: 210 40% 99%;
+    --foreground: 214 40% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 214 40% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 40% 14%;
+    --primary: 209 100% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 214 40% 18%;
+    --muted: 210 30% 95%;
+    --muted-foreground: 214 14% 45%;
+    --accent: 199 89% 92%;
+    --accent-foreground: 209 100% 28%;
+    --destructive: 0 74% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 25% 89%;
+    --input: 213 25% 88%;
+    --ring: 209 100% 40%;
+    --radius: 0.75rem;
+    --ink: 214 45% 11%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 214 40% 20%;
+    --sidebar-primary: 209 100% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 214 40% 18%;
+    --sidebar-border: 213 25% 89%;
+    --sidebar-ring: 209 100% 40%;
+  }
+  .dark {
+    --background: 214 45% 8%;
+    --foreground: 210 30% 96%;
+    --card: 214 42% 11%;
+    --card-foreground: 210 30% 96%;
+    --popover: 214 42% 11%;
+    --popover-foreground: 210 30% 96%;
+    --primary: 205 95% 56%;
+    --primary-foreground: 214 45% 8%;
+    --secondary: 214 32% 17%;
+    --secondary-foreground: 210 30% 96%;
+    --muted: 214 32% 16%;
+    --muted-foreground: 213 18% 66%;
+    --accent: 209 60% 20%;
+    --accent-foreground: 205 95% 76%;
+    --destructive: 0 62% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 28% 20%;
+    --input: 214 28% 20%;
+    --ring: 205 95% 56%;
+    --ink: 210 30% 96%;
+    --sidebar-background: 214 42% 11%;
+    --sidebar-foreground: 210 30% 92%;
+    --sidebar-primary: 205 95% 56%;
+    --sidebar-primary-foreground: 214 45% 8%;
+    --sidebar-accent: 214 32% 17%;
+    --sidebar-accent-foreground: 210 30% 96%;
+    --sidebar-border: 214 28% 20%;
+    --sidebar-ring: 205 95% 56%;
+  }
+}
+
+@layer base {
+  h1, h2, h3, .font-display {
+    font-family: "Sora", "Inter", sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  .grid-lines {
+    background-image: linear-gradient(hsl(var(--border) / 0.7) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.7) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  .marquee-track {
+    animation: marquee 28s linear infinite;
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track { animation: none; }
+  }
+}

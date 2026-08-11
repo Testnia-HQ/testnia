@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://testnia.com/sitemap.xml
