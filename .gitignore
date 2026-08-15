@@ -38,5 +38,8 @@ Thumbs.db
 .vscode/
 *.swp
 
+# AI tool artifacts
+.serena/
+
 # Vite cache
 *.local
