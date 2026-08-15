@@ -55,6 +55,13 @@ Configuration lives in `apps/api/.env`:
    - 9.4 Snapshot drift (`app.tar.gz` vs working tree)
 10. [Prioritized roadmap](#10-prioritized-roadmap)
 
+## Docs
+
+| Doc | What it covers |
+|---|---|
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Step-by-step guide to connecting GitHub to Hostinger (VPS + GitHub Actions recommended, Node.js hosting, stay-on-Horizons), plus releases & version-control workflow |
+| [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) | The Testnia MVP product specification (v1.0 consolidated, decision log included) |
+
 ---
 
 ## 1. Overview
@@ -191,6 +198,8 @@ The app is **built and deployed via Hostinger Horizons** (Hostinger's AI visual-
 - **No deployment manifest in the repo** (no Dockerfile, no platform config) — deployment is handled on the Hostinger side, outside this repo.
 
 > ⚠️ Because hosting config lives on Hostinger's side, changes here (ports, paths, environment) must be mirrored there. Keep `WEBSITE_*`/`appURL` in sync.
+>
+> **Important:** Horizons does **not** support Git/GitHub integration, so this repo cannot auto-deploy to the Horizons-hosted app. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full migration + GitHub connection guide.
 
 ---
 
