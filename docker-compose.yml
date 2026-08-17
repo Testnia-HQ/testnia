@@ -1,0 +1,101 @@
+# Testnia stack for Hostinger VPS (deployed via hostinger/deploy-on-vps@v2).
+# Context = repo root. All secrets/URLs are injected at deploy time (GitHub
+# secrets + variables) or a root .env file on the VPS — nothing is baked in.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      args:
+        VITE_PB_URL: ${VITE_PB_URL:-https://pb.testnia.com}
+        VITE_API_URL: ${VITE_API_URL:-https://api.testnia.com}
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - testnia
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://testnia.com}
+      PB_HOST: http://pocketbase:8090
+      PB_PUBLIC_URL: ${PB_PUBLIC_URL:-https://pb.testnia.com}
+      PB_SUPERUSER_EMAIL: ${PB_SUPERUSER_EMAIL:-}
+      PB_SUPERUSER_PASSWORD: ${PB_SUPERUSER_PASSWORD:-}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
+      WEBSITE_URL: ${WEBSITE_URL:-https://testnia.com}
+      INTEGRATED_AI_API_URL: ${INTEGRATED_AI_API_URL:-}
+      INTEGRATED_AI_API_KEY: ${INTEGRATED_AI_API_KEY:-}
+      PROXY_ENTRANCE_ID: ${PROXY_ENTRANCE_ID:-}
+      WEBSITE_ID: ${WEBSITE_ID:-}
+    depends_on:
+      - pocketbase
+    networks:
+      - testnia
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  pocketbase:
+    build:
+      context: .
+      dockerfile: docker/pocketbase/Dockerfile
+    restart: unless-stopped
+    environment:
+      PB_APP_NAME: ${PB_APP_NAME:-Testnia}
+      PB_APP_URL: ${PB_APP_URL:-https://pb.testnia.com}
+      PB_ENCRYPTION_KEY: ${PB_ENCRYPTION_KEY:-}
+      BUILDER_MAILER_API_URL: ${BUILDER_MAILER_API_URL:-}
+      BUILDER_MAILER_API_KEY: ${BUILDER_MAILER_API_KEY:-}
+      BUILDER_MAILER_SENDER_ADDRESS: ${BUILDER_MAILER_SENDER_ADDRESS:-}
+    volumes:
+      - pb_data:/data
+    networks:
+      - testnia
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+      - pocketbase
+    networks:
+      - testnia
+
+volumes:
+  pb_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  testnia:

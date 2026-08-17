@@ -1,0 +1,46 @@
+name: Deploy to Hostinger VPS
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hostinger
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Hostinger
+        uses: hostinger/deploy-on-vps@v2
+        with:
+          api-key: ${{ secrets.HOSTINGER_API_KEY }}
+          virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
+          project-name: testnia
+          personal-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          docker-compose-path: docker-compose.yml
+          environment-variables: |
+            VITE_PB_URL=${{ vars.VITE_PB_URL }}
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+            PB_APP_NAME=${{ vars.PB_APP_NAME }}
+            PB_APP_URL=${{ vars.PB_APP_URL }}
+            PB_PUBLIC_URL=${{ vars.PB_PUBLIC_URL }}
+            CORS_ORIGIN=${{ vars.CORS_ORIGIN }}
+            WEBSITE_URL=${{ vars.WEBSITE_URL }}
+            PB_ENCRYPTION_KEY=${{ secrets.PB_ENCRYPTION_KEY }}
+            PB_SUPERUSER_EMAIL=${{ secrets.PB_SUPERUSER_EMAIL }}
+            PB_SUPERUSER_PASSWORD=${{ secrets.PB_SUPERUSER_PASSWORD }}
+            PAYSTACK_SECRET_KEY=${{ secrets.PAYSTACK_SECRET_KEY }}
+            INTEGRATED_AI_API_URL=${{ secrets.INTEGRATED_AI_API_URL }}
+            INTEGRATED_AI_API_KEY=${{ secrets.INTEGRATED_AI_API_KEY }}
+            PROXY_ENTRANCE_ID=${{ secrets.PROXY_ENTRANCE_ID }}
+            WEBSITE_ID=${{ secrets.WEBSITE_ID }}
+            BUILDER_MAILER_API_URL=${{ secrets.BUILDER_MAILER_API_URL }}
+            BUILDER_MAILER_API_KEY=${{ secrets.BUILDER_MAILER_API_KEY }}
+            BUILDER_MAILER_SENDER_ADDRESS=${{ secrets.BUILDER_MAILER_SENDER_ADDRESS }}

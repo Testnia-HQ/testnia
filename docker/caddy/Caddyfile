@@ -1,0 +1,15 @@
+# ---- Testnia Caddy reverse proxy (auto HTTPS for testnia.com + subdomains) ----
+# Caddy fetches free Let's Encrypt certs automatically for the domains below.
+# DNS A records must point all of these to the VPS IP first.
+
+testnia.com, www.testnia.com {
+    reverse_proxy web:80
+}
+
+pb.testnia.com {
+    reverse_proxy pocketbase:8090
+}
+
+api.testnia.com {
+    reverse_proxy api:3001
+}

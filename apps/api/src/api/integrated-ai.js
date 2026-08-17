@@ -148,6 +148,17 @@ const SquashableSSEEventTypes = new Set([
  */
 
 /**
+ * Public, browser-reachable PocketBase base URL.
+ * Prefer the explicit PB_PUBLIC_URL override (VPS / subdomain); fall back to
+ * the legacy Horizons scheme via WEBSITE_DOMAIN for backwards compatibility.
+ *
+ * @returns {string}
+ */
+function getPublicPocketBaseUrl() {
+	return process.env.PB_PUBLIC_URL || `https://${process.env.WEBSITE_DOMAIN}/hcgi/platform`;
+}
+
+/**
  * Uploads images to PocketBase and returns their URLs.
  *
  * @param {{ images: Express.Multer.File[] }} params
@@ -163,7 +174,7 @@ export async function uploadImagesToPocketBase({ images }) {
 
 		const url = pocketbaseClient.files.getURL(record, record.file);
 
-		return url.replace('http://localhost:8090', `https://${process.env.WEBSITE_DOMAIN}/hcgi/platform`);
+		return url.replace('http://localhost:8090', getPublicPocketBaseUrl());
 	});
 
 	return Promise.all(uploadPromises);
@@ -200,7 +211,7 @@ function signImageReference(reference, token) {
 		return appendToken(reference, token);
 	}
 
-	const base = `https://${process.env.WEBSITE_DOMAIN}/hcgi/platform`;
+	const base = getPublicPocketBaseUrl();
 	const path = reference.startsWith('/') ? reference : `/${reference}`;
 
 	return appendToken(`${base}${path}`, token);

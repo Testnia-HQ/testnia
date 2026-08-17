@@ -132,6 +132,13 @@ volumes:
 > - Provide `apps/api/.env` (`PB_SUPERUSER_*`, `INTEGRATED_AI_*`, `WEBSITE_*`, `CORS_ORIGIN`, real Paystack key).
 > - Persist `pb_data` in a volume so PocketBase data survives redeploys.
 
+> ✅ **Done as of the VPS setup (see commit history / `docs/VPS_HANDOFF.md`):** the Docker stack is now in the repo —
+> - `docker-compose.yml` (root) + `docker/web|api|pocketbase|caddy/Dockerfile` (Caddy gives auto-HTTPS for `testnia.com`, `pb.`, `api.`)
+> - `/hcgi/*` URL coupling removed — web reads `VITE_PB_URL` / `VITE_API_URL`, API reads `PB_HOST` / `PB_PUBLIC_URL` (see `.env.example` and `docs/PATH_SUBSTITUTIONS.md`)
+> - PocketBase appURL is env-driven (`PB_APP_URL`) via migration + `pb_hooks/sync-app-settings.pb.js`
+> - Workflow `.github/workflows/deploy.yml` (correct action: `hostinger/deploy-on-vps@v2`)
+> - Root `.env.example` documents every secret/variable the stack needs
+
 ### Step A3 — Create the Hostinger API key + find VM ID
 
 1. hPanel → **Profile → API** → **Generate API key**. Copy it (shown once).
@@ -149,37 +156,40 @@ In the repo: **Settings → Secrets and variables → Actions**.
 
 ### Step A5 — Add the workflow
 
-Create `.github/workflows/deploy.yml` in the repo:
+The workflow already exists in the repo: **`.github/workflows/deploy.yml`** (action: `hostinger/deploy-on-vps@v2`, triggers on `main` push + `v*` tags + manual). It is ready to run as soon as the secrets below exist:
 
 ```yaml
-name: Deploy to Hostinger
-
+name: Deploy to Hostinger VPS
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-
+      - uses: actions/checkout@v4
       - name: Deploy to Hostinger
-        uses: hostinger/deploy-action@v1
+        uses: hostinger/deploy-on-vps@v2
         with:
           api-key: ${{ secrets.HOSTINGER_API_KEY }}
           virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
           project-name: testnia
           personal-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          docker-compose-path: docker/docker-compose.yml
+          docker-compose-path: docker-compose.yml
           environment-variables: |
-            NODE_ENV=production
-            API_URL=https://api.testnia.com
-            PB_PUBLIC_URL=https://db.testnia.com
+            VITE_PB_URL=${{ vars.VITE_PB_URL }}
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+            PB_APP_URL=${{ vars.PB_APP_URL }}
+            PB_PUBLIC_URL=${{ vars.PB_PUBLIC_URL }}
+            CORS_ORIGIN=${{ vars.CORS_ORIGIN }}
+            PB_ENCRYPTION_KEY=${{ secrets.PB_ENCRYPTION_KEY }}
+            PB_SUPERUSER_EMAIL=${{ secrets.PB_SUPERUSER_EMAIL }}
+            ...
 ```
 
-> `personal-token` is required for **private repositories** (this repo is private). Adjust `docker-compose-path` and `environment-variables` to match your final layout.
+> `personal-token` is required for **private repositories** (this repo is private). Set all GitHub **variables** (public URLs) and **secrets** (keys/credentials) per §8's env checklist; the exact list is in `docs/VPS_HANDOFF.md` and the workflow itself.
 
 ### Step A6 — First deploy & verify
 
@@ -303,14 +313,16 @@ With the Path A workflow, pushing the `v*` tag also triggers a deploy (the workf
 
 Fix these first — they come from the codebase review (README §9) and will break a deploy:
 
-- [ ] **`.env` provisioning** — `apps/api/.env` is missing `PB_SUPERUSER_EMAIL/PASSWORD`, `INTEGRATED_AI_API_URL/KEY`, `WEBSITE_*`, `PROXY_ENTRANCE_ID`, `CORS_ORIGIN`; API calls `process.exit(1)` at boot without them.
+- [ ] **`.env` provisioning** — `apps/api/.env` is missing `PB_SUPERUSER_EMAIL/PASSWORD`, `INTEGRATED_AI_API_URL/KEY`, `WEBSITE_*`, `PROXY_ENTRANCE_ID`, `CORS_ORIGIN`; API calls `process.exit(1)` at boot without them. On the VPS these are injected via GitHub secrets/variables into compose (see `.env.example`).
 - [ ] **Real Paystack key** — `PAYSTACK_SECRET_KEY` is a placeholder; demo mode lets anyone self-upgrade. Do not deploy with it.
 - [ ] **Security fixes** — unauthenticated admin routes (`/ads/*`, `/support/admin/*`, `/payment/verify`) must be locked down before production.
-- [ ] **Remove Horizons path coupling** — `/hcgi/platform` & `/hcgi/api` URLs in the web app must be replaced for non-Horizons hosting.
+- [ ] ~~**Remove Horizons path coupling**~~ ✅ **done** — web libs read `VITE_PB_URL`/`VITE_API_URL`; API reads `PB_HOST`/`PB_PUBLIC_URL` (see `docs/PATH_SUBSTITUTIONS.md`).
 - [ ] **Build script** — `apps/web` build uses `|| true` masking `generate-llms.js` failures; fix so deploys fail loudly.
-- [ ] **PocketBase** — swap the committed Linux binary to a Docker stage download; keep `pb_data` in a volume; provide `PB_ENCRYPTION_KEY`.
-- [ ] **Secrets hygiene** — confirm `*.env` stays gitignored; use CI secrets / VPS env for all credentials.
-- [ ] **CORS** — set `CORS_ORIGIN` to the real domain (it's empty → denies all browsers).
+- [ ] ~~**PocketBase**~~ ✅ **done** — committed Linux binary is used by `docker/pocketbase/Dockerfile`, data persisted in the `pb_data` volume, `PB_ENCRYPTION_KEY` required via env.
+- [ ] **Secrets hygiene** — confirm `*.env` stays gitignored; use CI secrets / VPS env for all credentials (GitHub secrets + variables already wired in the workflow).
+- [ ] **CORS** — set `CORS_ORIGIN` to the real domain (it's empty → denies all browsers); must be a GitHub **variable** named `CORS_ORIGIN`.
+
+> 🛠️ These are already tracked as roadmap items in `README.md` (Phase 1 — Security; Phase 2 — Reliability). Do not attempt a production deploy before Phase 1 is complete.
 
 > 🛠️ These are already tracked as roadmap items in `README.md` (Phase 1 — Security; Phase 2 — Reliability). Do not attempt a production deploy before Phase 1 is complete.
 

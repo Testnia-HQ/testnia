@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+**/node_modules
+node_modules
+apps/pocketbase/pb_data
+apps/pocketbase/pb_data/**
+app.tar.gz
+**/dist
+dist
+docs
+*.md
+.env
+.env.*
+!.env.example
+.vscode
+.serena

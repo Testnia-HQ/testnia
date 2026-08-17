@@ -179,9 +179,10 @@ console.warn = function(...args) {
 const configWindowFetchMonkeyPatch = `
 // Prevents authentication failures (PB returns 400) from crashing the app — use console.info, not console.error/PM2.
 // [urlPattern, bodyPattern] tuples; align with sandboxErrorUtils ERROR_BLACKLIST.
+// Matches both the legacy Horizons /hcgi/ scheme and VPS host-based URLs.
 const BENIGN_FETCH_ERRORS = [
-	[/hcgi\\/platform\\/api\\/collections\\/.*auth-with-password.*/i, /Failed to authenticate/i],
-	[/hcgi\\/api\\//i, /Insufficient credits/i],
+	[/\\/(?:hcgi\\/platform|pb)\\/api\\/collections\\/.*auth-with-password.*/i, /Failed to authenticate/i],
+	[/\\/(?:hcgi\\/api|api)\\/.*/i, /Insufficient credits/i],
 ];
 
 function isBenignFetchError(url, body) {
@@ -189,7 +190,7 @@ function isBenignFetchError(url, body) {
 		urlPattern.test(url) && (!bodyPattern || bodyPattern.test(body)));
 }
 
-const PLATFORM_URL_PATTERN = /hcgi\\/platform\\//i;
+const PLATFORM_URL_PATTERN = /\\/(?:hcgi\\/platform|pb)\\/i;
 const VALIDATION_CODE_TEXT_PATTERN = /validation_/;
 
 function hasValidationCode(value) {

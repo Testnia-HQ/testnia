@@ -61,6 +61,8 @@ Configuration lives in `apps/api/.env`:
 |---|---|
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Step-by-step guide to connecting GitHub to Hostinger (VPS + GitHub Actions recommended, Node.js hosting, stay-on-Horizons), plus releases & version-control workflow |
 | [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) | The Testnia MVP product specification (v1.0 consolidated, decision log included) |
+| [`docs/VPS_HANDOFF.md`](docs/VPS_HANDOFF.md) | Checklist for the business lead: get VM ID + Hostinger API key + DNS, hand off to engineer |
+| [`docs/PATH_SUBSTITUTIONS.md`](docs/PATH_SUBSTITUTIONS.md) | Horizons `/hcgi/*` → VPS URL audit and the env-driven fixes implemented in code |
 
 ---
 
@@ -188,18 +190,18 @@ testnia/
 The app is **built and deployed via Hostinger Horizons** (Hostinger's AI visual-editor platform). This has major implications:
 
 - **Live preview / app URL**: `https://cbad1937-bb56-434d-a825-32adef78986b.app-preview.com` (set as `appName`/`appURL` in `pb_migrations/1759383931_initial_app_settings.js`)
-- **Path routing**: PocketBase is served under `/hcgi/platform` and the Express API under `/hcgi/api`:
-  - `apps/web/src/lib/pocketbaseClient.js` → `new Pocketbase('/hcgi/platform')`
-  - `apps/web/src/lib/apiServerClient.js` → `API_SERVER_URL = '/hcgi/api'`
-  - `apps/api/src/api/integrated-ai.js` rewrites PB URLs from `localhost:8090` → `https://${WEBSITE_DOMAIN}/hcgi/platform`
+- **Path routing** (Horizons): PocketBase served under `/hcgi/platform` and the Express API under `/hcgi/api`. **Now env-configurable for VPS** — the client libs fall back to `/hcgi/*` when unset but are driven by `VITE_PB_URL` / `VITE_API_URL` (see `.env.example`), and the API uses `PB_HOST` / `PB_PUBLIC_URL`:
+  - `apps/web/src/lib/pocketbaseClient.js` → `import.meta.env.VITE_PB_URL || '/hcgi/platform'`
+  - `apps/web/src/lib/apiServerClient.js` → `import.meta.env.VITE_API_URL || '/hcgi/api'`
+  - `apps/api/src/api/integrated-ai.js` rewrites PB URLs using `PB_PUBLIC_URL` (falls back to `WEBSITE_DOMAIN/hcgi/platform`)
 - **Frontend integration plugins** (all `apply: 'serve'` — dev only): inline edit, selection mode, iframe route restoration, site-pages scan, pocketbase auth bridge, session journal, and a runtime error/navigation guard injected into `index.html`.
 - **Allowed editor origins**: `horizons.hostinger.com`, `horizons.hostinger.dev`, `horizons-frontend-local.hostinger.dev`; dev hosts allow `.app-preview.com` / `.app-preview.io`.
 - **Hostinger CDNs** are used for assets: hero image (`images.hostinger.com`), logo (`horizons-cdn.hostinger.com`), and the PB admin dashboard is proxied from `horizons-static-cdn.hostinger.com/.../ui/dist/index.html` (`pb_hooks/external-dashboard.pb.js`).
-- **No deployment manifest in the repo** (no Dockerfile, no platform config) — deployment is handled on the Hostinger side, outside this repo.
+- **Docker deployment (VPS)** — a self-contained Docker stack now ships in this repo (`docker-compose.yml` + `docker/`), deployable to a Hostinger VPS via GitHub Actions (`hostinger/deploy-on-vps@v2`, see `.github/workflows/deploy.yml`). No deployment manifest existed before.
 
-> ⚠️ Because hosting config lives on Hostinger's side, changes here (ports, paths, environment) must be mirrored there. Keep `WEBSITE_*`/`appURL` in sync.
+> ⚠️ Because hosting config lives on Hostinger's side, changes here (ports, paths, environment) must be mirrored there. Keep `WEBSITE_*`/`appURL`/`PB_*` in sync.
 >
-> **Important:** Horizons does **not** support Git/GitHub integration, so this repo cannot auto-deploy to the Horizons-hosted app. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full migration + GitHub connection guide.
+> **Important:** Horizons does **not** support Git/GitHub integration, so this repo cannot auto-deploy to the Horizons-hosted app. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full migration + GitHub connection guide and [`docs/VPS_HANDOFF.md`](docs/VPS_HANDOFF.md) for the business-lead checklist (VM ID + API key + DNS).
 
 ---
 
