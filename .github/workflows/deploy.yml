@@ -23,7 +23,6 @@ jobs:
           api-key: ${{ secrets.HOSTINGER_API_KEY }}
           virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
           project-name: testnia
-          personal-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           docker-compose-path: docker-compose.yml
           environment-variables: |
             VITE_PB_URL=${{ vars.VITE_PB_URL }}
