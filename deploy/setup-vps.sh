@@ -30,7 +30,22 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-# --- 2. Docker install ------------------------------------------------------
+# --- 2. Swap file (2 GB) ----------------------------------------------------
+SWAP_FILE="/swapfile"
+if [ ! -f "$SWAP_FILE" ]; then
+  log "Creating 2 GB swap file..."
+  fallocate -l 2G "$SWAP_FILE"
+  chmod 600 "$SWAP_FILE"
+  mkswap "$SWAP_FILE"
+  swapon "$SWAP_FILE"
+  if ! grep -q "^$SWAP_FILE" /etc/fstab; then
+    echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
+  fi
+else
+  log "Swap file already present, skipping."
+fi
+
+# --- 3. Docker install ------------------------------------------------------
 log "Checking Docker..."
 if ! command -v docker >/dev/null 2>&1; then
   log "Installing Docker..."
