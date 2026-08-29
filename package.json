@@ -9,6 +9,9 @@
     "start": "concurrently --kill-others --raw \"npm run start --prefix apps/api\" \"npm run start --prefix apps/pocketbase\"",
     "lint": "concurrently --raw \"npm run lint --prefix apps/web\" \"npm run lint --prefix apps/api\""
   },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "concurrently": "^10.0.3"
   },

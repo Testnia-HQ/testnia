@@ -37,7 +37,27 @@ process.on('SIGTERM', async () => {
 
 app.use(helmet());
 app.use(cors({
-	origin: process.env.CORS_ORIGIN || false, // deny cors when unset (on purpose)
+	origin: (origin, callback) => {
+		const allowed = (process.env.CORS_ORIGIN || '')
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
+
+		// Allow requests with no origin (same-origin, curl, server-to-server)
+		if (!origin) return callback(null, true);
+
+		// Allow any Vercel preview deployment
+		try {
+			const host = new URL(origin).host;
+			if (allowed.includes(origin) || /\.vercel\.app$/.test(host)) {
+				return callback(null, true);
+			}
+		} catch {
+			// malformed origin — deny
+		}
+
+		callback(null, false);
+	},
 	methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'QUERY'],
 	allowedHeaders: ['Authorization', 'Content-Type'],
 }));

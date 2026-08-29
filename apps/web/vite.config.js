@@ -376,7 +376,7 @@ export default defineConfig({
 	plugins: [
 		...(isDev ? [inlineEditPlugin(), editModeDevPlugin(), selectionModePlugin(), iframeRouteRestorationPlugin(), sitePagesPlugin(), pocketbaseAuthPlugin(), sessionJournalPlugin()] : []),
 		react(),
-		addTransformIndexHtml
+		...(isDev ? [addTransformIndexHtml] : []),
 	],
 	server: {
 		port: 3000,
@@ -397,7 +397,7 @@ export default defineConfig({
 		},
 	},
 	resolve: {
-		extensions: ['.jsx', '.js', '.json'],
+		extensions: ['.ts', '.tsx', '.jsx', '.js', '.json'],
 		alias: {
 			'@': path.resolve(__dirname, './src'),
 		},
