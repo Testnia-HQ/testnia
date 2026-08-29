@@ -1,88 +1,132 @@
-# GitHub ↔ Hostinger Connection & Release Guide
+# Deployment Guide
 
-> **TL;DR:** The Testnia codebase was built inside **Hostinger Horizons**, and **Hostinger Horizons does not support Git/GitHub integration**. You cannot point this GitHub repo at the Horizons-hosted app for auto-deploy. To get "version control + releases with GitHub", the app must move onto a GitHub-connected Hostinger platform. **This guide's recommended path is a Hostinger VPS + Docker + GitHub Actions**, which can run the full stack (web + api + PocketBase).
+> **Current architecture (Aug 2026):** Frontend on **Vercel** (static SPA), backend (`api` + `pocketbase`) on **Hostinger VPS** (`179.198.193.127`) via Docker + Caddy.
 
-- [1. The situation — why this matters](#1-the-situation--why-this-matters)
-- [2. Step 0 — What do you currently have? (check first)](#2-step-0--what-do-you-currently-have-check-first)
-- [3. Decision — pick your deployment target](#3-decision--pick-your-deployment-target)
-- [4. Path A (RECOMMENDED) — Hostinger VPS + Docker + GitHub Actions](#4-path-a-recommended--hostinger-vps--docker--github-actions)
-- [5. Path B — Hostinger Node.js hosting (GitHub App integration)](#5-path-b--hostinger-nodejs-hosting-github-app-integration)
-- [6. Path C — Stay on Horizons (GitHub as source-of-truth only)](#6-path-c--stay-on-horizons-github-as-source-of-truth-only)
-- [7. Releases & version control workflow](#7-releases--version-control-workflow)
-- [8. Pre-flight checklist (before first deploy)](#8-pre-flight-checklist-before-first-deploy)
-- [9. Troubleshooting](#9-troubleshooting)
-- [10. Links](#10-links)
+- [1. Current architecture](#1-current-architecture)
+- [2. Path D (ACTIVE) — Vercel frontend + VPS backend](#2-path-d-active--vercel-frontend--vps-backend)
+- [3. Path A — Hostinger VPS + Docker + GitHub Actions (full stack)](#3-path-a--hostinger-vps--docker--github-actions-full-stack)
+- [4. Path B — Hostinger Node.js hosting (GitHub App integration)](#4-path-b--hostinger-nodejs-hosting-github-app-integration)
+- [5. Path C — Stay on Horizons (deprecated)](#5-path-c--stay-on-horizons-deprecated)
+- [6. Releases & version control workflow](#6-releases--version-control-workflow)
+- [7. Pre-flight checklist (before first deploy)](#7-pre-flight-checklist-before-first-deploy)
+- [8. Troubleshooting](#8-troubleshooting)
+- [9. Links](#9-links)
 
 ---
 
-## 1. The situation — why this matters
+## 1. Current architecture
 
-The repo (`github.com/Testnia-HQ/testnia`) contains an app that was **created inside Hostinger Horizons** (Hostinger's AI app-builder). Evidence in the code:
+```
+ Browser
+   │
+   ├─ <project>.vercel.app (Vercel, static SPA) ──┐
+   │    VITE_PB_URL / VITE_API_URL (build-time)   │
+   ├─ pb.testnia.com  ────────────────────────────┤──► VPS Caddy ──► PocketBase :8090
+   └─ api.testnia.com ────────────────────────────┘──► VPS Caddy ──► Express :3001
+```
 
-- PocketBase is served under `/hcgi/platform` and the Express API under `/hcgi/api` (Horizons URL scheme).
-- The live app is set to `https://cbad1937-bb56-434d-a825-32adef78986b.app-preview.com` (a Horizons preview domain).
-- Horizons visual-editor/iframe/auth plugins ship inside `apps/web/plugins/` and `vite.config.js`.
-- Assets come from `horizons-cdn.hostinger.com` / `images.hostinger.com`.
+| Component | Host | Deploy method |
+|---|---|---|
+| `apps/web` (Vite + React SPA) | **Vercel** | Auto-deploy on push to `main` |
+| `apps/api` (Express 5) | **VPS** `179.198.193.127` | `docker compose up -d --build` via SSH |
+| `apps/pocketbase` (PocketBase 0.39.8) | **VPS** `179.198.193.127` | Docker, `pb_data` volume |
 
-### The blocker
+**Frontend is TypeScript** (landing page + shadcn/ui components). Backend remains JS.
 
-Per Hostinger's official documentation:
+---
 
-| Doc | Quote |
+## 2. Path D (ACTIVE) — Vercel frontend + VPS backend
+
+This is the **current deployment path**. Frontend deployed to Vercel; backend stays on VPS.
+
+### Step D1 — Create Vercel project
+
+1. Go to [vercel.com/new](https://vercel.com/new).
+2. Import `Testnia-HQ/testnia` (private repo — requires GitHub App installed on org).
+3. Configure:
+
+| Setting | Value |
 |---|---|
-| [Horizons: Technical specifications](https://www.hostinger.com/support/hostinger-horizons-technical-specifications/) | *"direct code imports from platforms like GitHub are not supported"*; *"FTP, File Manager, SFTP, and SSH are not supported"*; exported code *"is turned into a static website, and cannot be imported back to Horizons"* |
-| [How to deploy a Git repository in Hostinger](https://www.hostinger.com/support/1583302-how-to-deploy-a-git-repository-in-hostinger/) | *"Hostinger Horizons and Hostinger Website Builder websites do not support Git integration."* |
+| **Root Directory** | `.` (repo root) |
+| **Framework Preset** | Vite |
+| **Node.js Version** | 22.x |
+| **Build Command** | `npm run build --prefix apps/web` |
+| **Output Directory** | `dist/apps/web` |
 
-**Meaning:** There is no switch in Horizons to "connect GitHub" and no way to have pushes to GitHub deploy to the Horizons app. Version control with GitHub must be driven from **outside** Horizons.
+4. Click **Deploy** — first build runs.
 
-> ⚠️ **Team decision required.** The business lead should confirm: are we migrating the app off Horizons (Path A or B), or keeping Horizons as the live host (Path C)? Everything below depends on that answer. Path A is the recommended end state because it is the only one that runs the **entire** stack (web + Express API + PocketBase binary) with real CI/CD.
+### Step D2 — Environment variables
+
+In Vercel Dashboard → **Project → Settings → Environment Variables**:
+
+| Variable | Value | Environment |
+|---|---|---|
+| `VITE_PB_URL` | `https://pb.testnia.com` | Production + Preview |
+| `VITE_API_URL` | `https://api.testnia.com` | Production + Preview |
+
+> **Important:** Vite bakes `VITE_*` at build time. Changing a var requires a **redeploy** to take effect.
+
+### Step D3 — Verify the deploy
+
+After the build completes:
+
+```bash
+# SPA loads
+curl -I https://<project>.vercel.app          # 200
+
+# Deep link refresh works (SPA rewrite)
+curl -I https://<project>.vercel.app/privacy  # 200
+
+# API reachable from frontend (check Network tab in browser)
+curl -I https://api.testnia.com/health        # 200 JSON
+```
+
+### Step D4 — Custom domain (optional, deferred)
+
+When ready to point `testnia.com` at Vercel:
+
+1. In Vercel Dashboard → **Project → Settings → Domains** → add `testnia.com`.
+2. Update DNS records:
+
+| Host | Type | Value |
+|---|---|---|
+| `@` | CNAME | `cname.vercel-dns.com` |
+| `www` | CNAME | `cname.vercel-dns.com` |
+
+3. Keep `pb.testnia.com` and `api.testnia.com` pointing at VPS `179.198.193.127`.
+4. Update VPS `CORS_ORIGIN` to include `https://testnia.com`.
+
+### Step D5 — Update VPS CORS for Vercel
+
+On the VPS:
+
+```bash
+cd /opt/testnia
+# Edit .env — add Vercel preview URLs
+sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN=https://testnia.com,https://www.testnia.com,https://testnia-*.vercel.app|' .env
+
+# Restart API
+docker compose up -d api
+```
+
+Or set `CORS_ORIGIN` in `.github/workflows/deploy.yml` if using GitHub Actions.
+
+### Re-deploy after a new push
+
+Vercel auto-deploys every push to `main`. For manual trigger:
+
+```bash
+# Via CLI
+npx vercel --prod
+
+# Or via Dashboard → Deployments → ⋯ → Redeploy
+```
 
 ---
 
-## 2. Step 0 — What do you currently have? (check first)
+## 3. Path A — Hostinger VPS + Docker + GitHub Actions (full stack)
 
-Log in to [hPanel](https://hpanel.hostinger.com) and inspect what's in the account before choosing a path.
-
-1. **Websites tab** (`hpanel.hostinger.com/websites`)
-   - Each entry is a "website". Open **Dashboard** on each.
-   - If a site's dashboard has a **Horizons** label / opens the Horizons AI editor, that site is a **Horizons app** (this is where Testnia lives today).
-   - If a site shows a normal hosting dashboard with **Advanced → Git**, **Node.js**, or **File Manager**, it's a regular shared/web or Node.js hosting plan.
-2. **VPS tab** (`hpanel.hostinger.com/vps`)
-   - Lists any Virtual Private Servers (hostname like `srv123456.hstgr.cloud`).
-   - Note the **VM ID** (the digits in `srv<ID>.hstgr.cloud`) — needed for Path A.
-   - Check the OS template: is it the **Docker** template, or plain OS?
-3. **Billing / Orders** (`hpanel.hostinger.com/billing`)
-   - Confirms which paid products exist: Horizons subscription, hosting plans, VPS, domains.
-4. **Profile → API** (`hpanel.hostinger.com/profile/api`)
-   - Where you create the Hostinger API token used by GitHub Actions (Path A).
-
-**Decision table based on what you find:**
-
-| What you find | Recommended action |
-|---|---|
-| Horizons app + its bundled hosting only | Migrate to a VPS (Path A) or Node.js plan (Path B) for real CI/CD, or keep Horizons as-is (Path C) |
-| A VPS exists (any OS) | Use Path A; install Docker on it if not using the Docker template |
-| A Node.js hosting plan exists | Path B works for web + api (PocketBase still needs a home — see §5) |
-| Only domains/email | Need to purchase a VPS or Node.js plan to proceed with Path A/B |
-
----
-
-## 3. Decision — pick your deployment target
-
-| | **Path A — VPS + Docker + GitHub Actions** | **Path B — Node.js hosting (GitHub App)** | **Path C — stay on Horizons** |
-|---|---|---|---|
-| **Runs full stack?** | ✅ web + api + PocketBase (all in Docker) | ⚠️ web (static) + api (Express) only; PocketBase binary cannot run on Node.js hosting | ⚠️ Horizons runs it, but only as its own managed app |
-| **GitHub connection** | GitHub Actions workflow → Hostinger API | Native GitHub App: push → install → build → restart | ❌ none (no Git support) |
-| **Auto-deploy on push** | ✅ (via workflow) | ✅ (native webhook) | ❌ manual export/publish |
-| **Releases/tags deploy** | ✅ (workflow triggers on tags) | ⚠️ tag = branch push; no dedicated release trigger | ❌ |
-| **Effort** | Higher (Dockerfiles, compose, workflow) but one-time | Lower for web+api | Lowest, but no CI/CD |
-| **Best for** | **Production end-state (recommended)** | Quick win for frontend/API split | Keeping the current live site untouched |
-
----
-
-## 4. Path A (RECOMMENDED) — Hostinger VPS + Docker + GitHub Actions
-
-Official action: [`hostinger/deploy-action`](https://github.com/marketplace/actions/deploy-on-hostinger-vps) (also [`hostinger/deploy-on-vps`](https://github.com/hostinger/deploy-on-vps)). It deploys **Docker Compose** apps to a Hostinger VPS.
+This runs **all three services** (web + api + pocketbase) on a VPS. Currently paused due to VPS issues — see [VPS_HANDOFF.md](VPS_HANDOFF.md).
 
 ### Step A1 — Provision / prepare the VPS
 
@@ -92,52 +136,19 @@ Official action: [`hostinger/deploy-action`](https://github.com/marketplace/acti
 
 ### Step A2 — Containerize the app
 
-The repo is an npm-workspaces monorepo. Dockerfiles and a compose file are **not committed yet** — this is part of the refactor (see §8). Sketch:
+The repo is an npm-workspaces monorepo. Dockerfiles and a compose file are committed:
 
 ```
 testnia/
+├── docker-compose.yml
 ├── docker/
-│   └── docker-compose.yml
-├── apps/
-│   ├── web/Dockerfile        # multi-stage: build Vite SPA → serve (nginx or `vite preview`)
-│   ├── api/Dockerfile        # npm install at apps/api → `node --env-file=.env src/main.js`
-│   └── pocketbase/Dockerfile # FROM alpine → download pocketbase Linux binary → ./pocketbase serve
+│   ├── web/Dockerfile
+│   ├── api/Dockerfile
+│   ├── pocketbase/Dockerfile
+│   └── caddy/Caddyfile
+├── deploy/
+│   └── setup-vps.sh
 ```
-
-`docker-compose.yml` (illustrative — final version is part of the refactor):
-
-```yaml
-services:
-  pocketbase:
-    build: ../apps/pocketbase
-    ports: ["8090:8090"]
-    env_file: ../apps/pocketbase/.env
-    volumes: [pb_data:/app/pb_data]
-  api:
-    build: ../apps/api
-    ports: ["3001:3001"]
-    env_file: ../apps/api/.env
-    depends_on: [pocketbase]
-  web:
-    build: ../apps/web
-    ports: ["80:80"]   # or serve behind the VPS IP / domain
-    depends_on: [api]
-volumes:
-  pb_data:
-```
-
-> **Deployment-specific changes still needed** (track in §8 / GitHub issues):
-> - Replace Horizons-specific routing (`/hcgi/platform`, `/hcgi/api`) with plain `/`-rooted URLs (web libs `pocketbaseClient.js`, `apiServerClient.js`, `integratedAiClient.js`).
-> - Provide `apps/pocketbase/.env` (`PB_ENCRYPTION_KEY`, superuser creds, mailer vars).
-> - Provide `apps/api/.env` (`PB_SUPERUSER_*`, `INTEGRATED_AI_*`, `WEBSITE_*`, `CORS_ORIGIN`, real Paystack key).
-> - Persist `pb_data` in a volume so PocketBase data survives redeploys.
-
-> ✅ **Done as of the VPS setup (see commit history / `docs/VPS_HANDOFF.md`):** the Docker stack is now in the repo —
-> - `docker-compose.yml` (root) + `docker/web|api|pocketbase|caddy/Dockerfile` (Caddy gives auto-HTTPS for `testnia.com`, `pb.`, `api.`)
-> - `/hcgi/*` URL coupling removed — web reads `VITE_PB_URL` / `VITE_API_URL`, API reads `PB_HOST` / `PB_PUBLIC_URL` (see `.env.example` and `docs/PATH_SUBSTITUTIONS.md`)
-> - PocketBase appURL is env-driven (`PB_APP_URL`) via migration + `pb_hooks/sync-app-settings.pb.js`
-> - Workflow `.github/workflows/deploy.yml` (correct action: `hostinger/deploy-on-vps@v2`)
-> - Root `.env.example` documents every secret/variable the stack needs
 
 ### Step A3 — Create the Hostinger API key + find VM ID
 
@@ -156,40 +167,7 @@ In the repo: **Settings → Secrets and variables → Actions**.
 
 ### Step A5 — Add the workflow
 
-The workflow already exists in the repo: **`.github/workflows/deploy.yml`** (action: `hostinger/deploy-on-vps@v2`, triggers on `main` push + `v*` tags + manual). It is ready to run as soon as the secrets below exist:
-
-```yaml
-name: Deploy to Hostinger VPS
-on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  workflow_dispatch:
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Hostinger
-        uses: hostinger/deploy-on-vps@v2
-        with:
-          api-key: ${{ secrets.HOSTINGER_API_KEY }}
-          virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
-          project-name: testnia
-          personal-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          docker-compose-path: docker-compose.yml
-          environment-variables: |
-            VITE_PB_URL=${{ vars.VITE_PB_URL }}
-            VITE_API_URL=${{ vars.VITE_API_URL }}
-            PB_APP_URL=${{ vars.PB_APP_URL }}
-            PB_PUBLIC_URL=${{ vars.PB_PUBLIC_URL }}
-            CORS_ORIGIN=${{ vars.CORS_ORIGIN }}
-            PB_ENCRYPTION_KEY=${{ secrets.PB_ENCRYPTION_KEY }}
-            PB_SUPERUSER_EMAIL=${{ secrets.PB_SUPERUSER_EMAIL }}
-            ...
-```
-
-> `personal-token` is required for **private repositories** (this repo is private). Set all GitHub **variables** (public URLs) and **secrets** (keys/credentials) per §8's env checklist; the exact list is in `docs/VPS_HANDOFF.md` and the workflow itself.
+The workflow already exists in the repo: **`.github/workflows/deploy.yml`** (action: `hostinger/deploy-on-vps@v2`, triggers on `main` push + `v*` tags + manual).
 
 ### Step A6 — First deploy & verify
 
@@ -203,7 +181,7 @@ From here, **every push to `main` (and every `v*` tag) auto-redeploys**.
 
 ---
 
-## 5. Path B — Hostinger Node.js hosting (GitHub App integration)
+## 4. Path B — Hostinger Node.js hosting (GitHub App integration)
 
 If you don't need a VPS yet and want GitHub deploys quickly, Hostinger's **Node.js hosting** has a native GitHub integration (GitHub App → install → build → start).
 
@@ -240,7 +218,7 @@ Official docs: [Node.js · GitHub](https://docs.hostinger.com/node.js/github) ·
 
 ---
 
-## 6. Path C — Stay on Horizons (GitHub as source-of-truth only)
+## 5. Path C — Stay on Horizons (GitHub as source-of-truth only)
 
 Use this if the team wants to keep the current live Horizons app untouched and use GitHub purely for code review/version control. There is **no auto-deploy**.
 
@@ -258,7 +236,7 @@ Use this if the team wants to keep the current live Horizons app untouched and u
 
 ---
 
-## 7. Releases & version control workflow
+## 6. Releases & version control workflow
 
 This applies once Path A (or B) is live.
 
@@ -309,42 +287,54 @@ With the Path A workflow, pushing the `v*` tag also triggers a deploy (the workf
 
 ---
 
-## 8. Pre-flight checklist (before first deploy)
+## 7. Pre-flight checklist (before first deploy)
 
-Fix these first — they come from the codebase review (README §9) and will break a deploy:
+### Vercel frontend (Path D)
 
-- [ ] **`.env` provisioning** — `apps/api/.env` is missing `PB_SUPERUSER_EMAIL/PASSWORD`, `INTEGRATED_AI_API_URL/KEY`, `WEBSITE_*`, `PROXY_ENTRANCE_ID`, `CORS_ORIGIN`; API calls `process.exit(1)` at boot without them. On the VPS these are injected via GitHub secrets/variables into compose (see `.env.example`).
-- [ ] **Real Paystack key** — `PAYSTACK_SECRET_KEY` is a placeholder; demo mode lets anyone self-upgrade. Do not deploy with it.
-- [ ] **Security fixes** — unauthenticated admin routes (`/ads/*`, `/support/admin/*`, `/payment/verify`) must be locked down before production.
-- [ ] ~~**Remove Horizons path coupling**~~ ✅ **done** — web libs read `VITE_PB_URL`/`VITE_API_URL`; API reads `PB_HOST`/`PB_PUBLIC_URL` (see `docs/PATH_SUBSTITUTIONS.md`).
-- [ ] **Build script** — `apps/web` build uses `|| true` masking `generate-llms.js` failures; fix so deploys fail loudly.
-- [ ] ~~**PocketBase**~~ ✅ **done** — committed Linux binary is used by `docker/pocketbase/Dockerfile`, data persisted in the `pb_data` volume, `PB_ENCRYPTION_KEY` required via env.
-- [ ] **Secrets hygiene** — confirm `*.env` stays gitignored; use CI secrets / VPS env for all credentials (GitHub secrets + variables already wired in the workflow).
-- [ ] **CORS** — set `CORS_ORIGIN` to the real domain (it's empty → denies all browsers); must be a GitHub **variable** named `CORS_ORIGIN`.
+- [x] **TypeScript scaffold** — `tsconfig.json`, `eslint.config.mjs` with `typescript-eslint`, `components.json` `tsx: true`
+- [x] **Landing rewrite** — `HomePage.tsx`, `SiteHeader.tsx`, `Reveal.tsx`, `CountUp.tsx` with shadcn/ui components
+- [x] **Asset migration** — `hero.jpg` + `logo.jpg` moved from Hostinger CDN to `/public`
+- [x] **Build config** — `vercel.json` with `outputDirectory: dist/apps/web`, `rewrites` for SPA
+- [x] **`|| true` removed** — `apps/web/package.json` build script fails loudly on `generate-llms.js` errors
+- [x] **Horizons prod cleanup** — `addTransformIndexHtml` gated behind `isDev`
+- [x] **CORS fix** — `apps/api/src/main.js` splits comma list + allows `*.vercel.app`
+- [x] **Error middleware fix** — respects `err.status/err.statusCode` (not always 500)
+- [ ] **Vercel env vars** — `VITE_PB_URL` and `VITE_API_URL` set in Vercel Dashboard
+- [ ] **VPS CORS updated** — `CORS_ORIGIN` includes Vercel domain
 
-> 🛠️ These are already tracked as roadmap items in `README.md` (Phase 1 — Security; Phase 2 — Reliability). Do not attempt a production deploy before Phase 1 is complete.
+### VPS backend (Path A/D)
 
-> 🛠️ These are already tracked as roadmap items in `README.md` (Phase 1 — Security; Phase 2 — Reliability). Do not attempt a production deploy before Phase 1 is complete.
+- [ ] **`.env` provisioning** — `apps/api/.env` needs `PB_SUPERUSER_EMAIL/PASSWORD`, `INTEGRATED_AI_API_URL/KEY`, `WEBSITE_*`, `PROXY_ENTRANCE_ID`, `CORS_ORIGIN`; API exits at boot without them
+- [ ] **Real Paystack key** — `PAYSTACK_SECRET_KEY` is a placeholder; demo mode lets anyone self-upgrade
+- [ ] **Security fixes** — unauthenticated admin routes (`/ads/*`, `/support/admin/*`, `/payment/verify`)
+- [x] ~~**Remove Horizons path coupling**~~ — web libs read `VITE_PB_URL`/`VITE_API_URL`
+- [x] ~~**PocketBase**~~ — committed Linux binary, `pb_data` volume, `PB_ENCRYPTION_KEY` required
 
 ---
 
-## 9. Troubleshooting
+## 8. Troubleshooting
 
 | Problem | Likely cause | Fix |
 |---|---|---|
+| **Vercel build fails at install** | Node version mismatch, native deps, peer conflicts | Set Node 22.x in Vercel Project Settings; check build log for first error |
+| **Vercel build fails: "outDir not found"** | Output directory mismatch | Confirm `outputDirectory: dist/apps/web` in `vercel.json` or Project Settings |
+| **Vercel SPA deep links 404** | Missing SPA rewrite | Confirm `rewrites` in `vercel.json` or Vercel's auto-SPA for Vite preset |
+| **Frontend can't reach API/PB** | `VITE_PB_URL`/`VITE_API_URL` missing at build time | Add both in Vercel Dashboard → Env Vars (Build scope) → **Redeploy** |
+| **CORS errors in browser** | VPS `CORS_ORIGIN` doesn't include Vercel domain | Update VPS `.env` `CORS_ORIGIN` to include `https://<proj>.vercel.app` → `docker compose up -d api` |
+| **Preview deploy can't reach API** | Preview URL not in CORS_ORIGIN | The CORS fix in `main.js` auto-allows `*.vercel.app`; verify VPS API is running |
+| **Build fails: "generate-llms.js"** | No Helmet pages found in source | Check `src/pages/*.jsx`/`*.tsx` for literal `<title>` tags; fix source |
 | **No deploy triggers on push** | Branch mismatch / webhook missing / workflow filtered out | Confirm push goes to `main` (or the workflow's branch); for Path B confirm **Connected with GitHub** status on the site dashboard |
 | **Workflow fails auth** | Wrong `HOSTINGER_API_KEY` or `HOSTINGER_VM_ID` | Regenerate API key; re-copy VM ID from `srv<ID>.hstgr.cloud` |
 | **Private repo deploy fails** | Missing `PERSONAL_ACCESS_TOKEN` | Add PAT secret (repo scope) and pass `personal-token` |
 | **Build fails at install** | Node version mismatch, native deps, peer conflicts | Set Node 22; npm auto-retries with `--legacy-peer-deps`; check first error in log |
 | **Site serves old version** | Cache | Clear Hostinger cache (Path B); hard-refresh; verify container restarted (Path A) |
-| **`Could not access repository` (Path B, URL deploy)** | Used public-URL deploy on a private repo | Connect the owning GitHub account instead of pasting a URL |
 | **PocketBase data lost after redeploy** | `pb_data` not on a volume | Add `volumes: [pb_data:/app/pb_data]` in compose (Path A) |
-| **SSH/File Manager missing on Horizons** | Horizons isn't file-based | That's expected — migrate to Path A/B to regain file/SSH access |
+| **SSH/File Manager missing on Horizons** | Horizons isn't file-based | That's expected — migrate to Path A/B/D to regain file/SSH access |
 | **Domain/SSL not working** | DNS not pointed / SSL not enabled | Point A/CNAME to VPS (Path A) or use hPanel SSL (Path B) |
 
 ---
 
-## 10. Links
+## 9. Links
 
 - Hostinger Horizons: [technical specifications](https://www.hostinger.com/support/hostinger-horizons-technical-specifications/) · [how to export code](https://www.hostinger.com/support/10771345-hostinger-horizons-how-to-export-code/) · [hosting requirements](https://www.hostinger.com/support/hostinger-horizons-hosting-requirements/)
 - Hostinger Git (not for Horizons): [how to deploy a Git repository](https://www.hostinger.com/support/1583302-how-to-deploy-a-git-repository-in-hostinger/) · [docs: Git](https://docs.hostinger.com/websites/git.md)
