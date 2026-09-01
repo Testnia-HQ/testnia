@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm run build --prefix apps/web",
-  "outputDirectory": "dist/apps/web",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "framework": "vite",
   "installCommand": "npm ci",
   "rewrites": [

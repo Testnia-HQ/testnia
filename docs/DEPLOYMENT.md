@@ -47,11 +47,11 @@ This is the **current deployment path**. Frontend deployed to Vercel; backend st
 
 | Setting | Value |
 |---|---|
-| **Root Directory** | `.` (repo root) |
+| **Root Directory** | `apps/web` |
 | **Framework Preset** | Vite |
 | **Node.js Version** | 22.x |
-| **Build Command** | `npm run build --prefix apps/web` |
-| **Output Directory** | `dist/apps/web` |
+| **Build Command** | `npm run build` (auto-detected from `vercel.json`) |
+| **Output Directory** | `dist` (auto-detected from `vercel.json`) |
 
 4. Click **Deploy** — first build runs.
 

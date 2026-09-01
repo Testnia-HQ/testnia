@@ -153,9 +153,17 @@ function processPageFile(filePath, routes) {
 	}
 }
 
+function findAppFile(cwd) {
+	for (const ext of ['.tsx', '.jsx', '.ts', '.js']) {
+		const p = path.join(cwd, 'src', `App${ext}`);
+		if (fs.existsSync(p)) return p;
+	}
+	return path.join(cwd, 'src', 'App.jsx');
+}
+
 function main() {
 	const pagesDir = path.join(process.cwd(), 'src', 'pages');
-	const appJsxPath = path.join(process.cwd(), 'src', 'App.jsx');
+	const appJsxPath = findAppFile(process.cwd());
 
 	let pages = [];
 

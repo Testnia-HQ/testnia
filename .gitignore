@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+apps/web/public/llms.txt
 
 # Environment & secrets — NEVER commit real secrets
 *.env
